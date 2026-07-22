@@ -1,0 +1,37 @@
+# Core dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-dotenv==1.0.0
+pydantic==2.5.2
+
+# Database
+supabase==2.0.3
+httpx>=0.24.0,<0.25.0
+
+# Image processing
+Pillow==10.1.0
+numpy>=1.24.3
+opencv-python>=4.8.1
+scipy>=1.10.0
+scikit-image>=0.19.0
+
+# AI/ML (torch/torchvision installed by start.sh BEFORE this file)
+basicsr==1.4.2
+realesrgan==0.3.0
+addict>=2.0.0
+yapf>=0.32.0
+lmdb>=1.0.0
+pyyaml>=6.0
+
+# HTTP client
+aiohttp==3.9.1
+
+# Archive handling
+rarfile==4.1
+
+# Logging
+loguru==0.7.2
+
+# Utils
+tqdm==4.66.1
+requests>=2.28.0
