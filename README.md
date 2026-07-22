@@ -279,6 +279,95 @@ Automatically handled -- oversized images are split into sequential numbered chu
 
 ---
 
+## Future Improvements: Text-Aware Upscaling for Webtoons
+
+**Problem**: Current anime models (RealESRGAN, AnimeSharp, 4x-AnimeSharp) are trained to *remove noise/artifacts*. They classify text/speech bubbles as "noise" and blur/smudge them.
+
+**Solution: Two-Stage Text-Aware Pipeline**
+
+### Phase 1: Add Text-Safe Models (DONE - in v5)
+- `realesr-general-x4v3` — supports `-dn` denoise strength (0.0 = no denoising, preserves text)
+- `4x-UltraSharp` — general-purpose, better edge preservation than anime models
+- Both selectable in `start.sh` menu (options 4 & 5)
+
+### Phase 2: Automatic Text Region Detection & Selective Processing
+```
+Input Image
+    │
+    ▼
+┌───────────────────┐
+│ Text Detection    │  ← manga-ocr / easyocr / CRAFT / edge detection
+│ (bubble masks)    │
+└───────────────────┘
+    │
+    ├──────────────────┬──────────────────┐
+    ▼                  ▼                  ▼
+┌─────────┐      ┌─────────────┐    ┌────────────┐
+│ Text    │      │ Art/Background│   │ Borders/   │
+│ Regions │      │ Regions       │   │ Panels     │
+└────┬────┘      └──────┬────────┘    └─────┬──────┘
+     │                  │                   │
+     ▼                  ▼                   ▼
+realesr-general-x4v3  4x-AnimeSharp     realesr-general-x4v3
+(-dn 0.0)             (full quality)     (-dn 0.3)
+     │                  │                   │
+     └──────────────────┴───────────────────┘
+                    │
+                    ▼
+            Composite (alpha-blend masks)
+                    │
+                    ▼
+            Output Image
+```
+
+### Implementation Plan
+
+1. **Text Detection Service** (`app/services/text_detector.py`)
+   - Use `manga-ocr` or `easyocr` for bubble detection
+   - Fallback: Canny edge detection + contour filtering for speech bubbles
+   - Output: binary mask (1=text, 0=art) per image
+
+2. **Selective Upscaler** (`app/services/selective_upscaler.py`)
+   - Split image into text/art regions using mask
+   - Upscale text regions with `realesr-general-x4v3` (-dn 0.0)
+   - Upscale art regions with `4x-AnimeSharp` or `4x-UltraSharp`
+   - Blend using feathered mask edges (avoid seams)
+
+3. **Pipeline Integration** (`app/services/image_pipeline.py`)
+   - Add Step 4: "Text Detection" after split, before upscale
+   - Toggle via `.env`: `TEXT_AWARE_UPSCALE=true/false`
+   - Fallback to single-model if detection fails
+
+4. **Model Management**
+   - Pre-download `realesr-general-x4v3` and `4x-UltraSharp` in `start.sh`
+   - Cache upsamplers in `UpscaleService` (already singleton)
+
+### Models to Add
+
+| Model | Architecture | Size | Use Case |
+|-------|-------------|------|----------|
+| `realesr-general-x4v3` | RRDBNet (6 block) | 17MB | Text regions (with -dn 0.0) |
+| `4x-UltraSharp` | RRDBNet (23 block) | 67MB | Art regions / general |
+| `4x-AnimeSharp` | RRDBNet (23 block) | 29MB | Art regions (current best) |
+
+### Configuration (`.env`)
+```env
+TEXT_AWARE_UPSCALE=true
+TEXT_MODEL=realesr-general-x4v3
+ART_MODEL=4x-AnimeSharp
+TEXT_DENOISE=0.0
+ART_DENOISE=0.3
+TEXT_DETECTOR=manga-ocr  # or easyocr, craft
+```
+
+### Performance Impact
+- +1-2s per image for text detection
+- ~2x upscale time (two models instead of one)
+- GPU VRAM: +50% (load two models, or swap)
+- **Quality**: Massive improvement on text/bubbles
+
+---
+
 ## Tech Stack
 
 - **Python**: FastAPI, Uvicorn, Pillow, NumPy, OpenCV, PyTorch, Real-ESRGAN, Loguru, aiohttp

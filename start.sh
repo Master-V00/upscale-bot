@@ -183,8 +183,11 @@ else:
         echo ""
         echo "  [1] realesr-animevideov3   (FAST - 5-10x faster, 2.4MB, excellent anime quality)"
         echo "  [2] RealESRGAN_x4plus_anime_6B  (BEST QUALITY - 17MB, slower, sharper details)"
+        echo "  [3] 4x-AnimeSharp        (BEST FOR WEBTOONS - 29MB, handles text+bubbles better)"
+        echo "  [4] realesr-general-x4v3   (TEXT-SAFE - 17MB, denoise control, preserves text)"
+        echo "  [5] 4x-UltraSharp          (GENERAL - 67MB, best edge/texture preservation)"
         echo ""
-        read -p "  Choose model [1-2]: " MODEL_CHOICE
+        read -p "  Choose model [1-5]: " MODEL_CHOICE
         
         case "$MODEL_CHOICE" in
             1)
@@ -192,6 +195,15 @@ else:
                 ;;
             2)
                 SELECTED_MODEL="RealESRGAN_x4plus_anime_6B"
+                ;;
+            3)
+                SELECTED_MODEL="4x-AnimeSharp"
+                ;;
+            4)
+                SELECTED_MODEL="realesr-general-x4v3"
+                ;;
+            5)
+                SELECTED_MODEL="4x-UltraSharp"
                 ;;
             *)
                 echo "  Invalid choice, using default (realesr-animevideov3)"
@@ -224,6 +236,24 @@ else:
                     curl -L --progress-bar -o "$MODEL_FILE" \
                         "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth"
                     ;;
+                "4x-AnimeSharp")
+                    wget -q --show-progress -O "$MODEL_FILE" \
+                        "https://huggingface.co/Kim2091/AnimeSharp/resolve/main/4x-AnimeSharp.pth" 2>/dev/null || \
+                    curl -L --progress-bar -o "$MODEL_FILE" \
+                        "https://huggingface.co/Kim2091/AnimeSharp/resolve/main/4x-AnimeSharp.pth"
+                    ;;
+                "realesr-general-x4v3")
+                    wget -q --show-progress -O "$MODEL_FILE" \
+                        "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth" 2>/dev/null || \
+                    curl -L --progress-bar -o "$MODEL_FILE" \
+                        "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth"
+                    ;;
+                "4x-UltraSharp")
+                    wget -q --show-progress -O "$MODEL_FILE" \
+                        "https://huggingface.co/lokCX/4x-Ultrasharp/resolve/main/4x-UltraSharp.pth" 2>/dev/null || \
+                    curl -L --progress-bar -o "$MODEL_FILE" \
+                        "https://huggingface.co/lokCX/4x-Ultrasharp/resolve/main/4x-UltraSharp.pth"
+                    ;;
             esac
             echo "  Model downloaded: $(du -h $MODEL_FILE | cut -f1)"
         else
@@ -251,7 +281,7 @@ esac
 # Download all model weights if not present
 # ============================================
 echo "[6/8] Checking model weights..."
-for MODEL in "RealESRGAN_x4plus_anime_6B" "realesr-animevideov3"; do
+for MODEL in "RealESRGAN_x4plus_anime_6B" "realesr-animevideov3" "4x-AnimeSharp" "realesr-general-x4v3" "4x-UltraSharp" "realesr-general-wdn-x4v3"; do
     MODEL_FILE="weights/${MODEL}.pth"
     if [ ! -f "$MODEL_FILE" ]; then
         echo "  Downloading $MODEL..."
@@ -267,6 +297,30 @@ for MODEL in "RealESRGAN_x4plus_anime_6B" "realesr-animevideov3"; do
                     "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth" 2>/dev/null || \
                 curl -L --progress-bar -o "$MODEL_FILE" \
                     "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth"
+                ;;
+            "4x-AnimeSharp")
+                wget -q --show-progress -O "$MODEL_FILE" \
+                    "https://huggingface.co/Kim2091/AnimeSharp/resolve/main/4x-AnimeSharp.pth" 2>/dev/null || \
+                curl -L --progress-bar -o "$MODEL_FILE" \
+                    "https://huggingface.co/Kim2091/AnimeSharp/resolve/main/4x-AnimeSharp.pth"
+                ;;
+            "realesr-general-x4v3")
+                wget -q --show-progress -O "$MODEL_FILE" \
+                    "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth" 2>/dev/null || \
+                curl -L --progress-bar -o "$MODEL_FILE" \
+                    "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth"
+                ;;
+            "4x-UltraSharp")
+                wget -q --show-progress -O "$MODEL_FILE" \
+                    "https://huggingface.co/lokCX/4x-Ultrasharp/resolve/main/4x-UltraSharp.pth" 2>/dev/null || \
+                curl -L --progress-bar -o "$MODEL_FILE" \
+                    "https://huggingface.co/lokCX/4x-Ultrasharp/resolve/main/4x-UltraSharp.pth"
+                ;;
+            "realesr-general-wdn-x4v3")
+                wget -q --show-progress -O "$MODEL_FILE" \
+                    "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-wdn-x4v3.pth" 2>/dev/null || \
+                curl -L --progress-bar -o "$MODEL_FILE" \
+                    "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-wdn-x4v3.pth"
                 ;;
         esac
         echo "  Downloaded: $(du -h $MODEL_FILE | cut -f1)"

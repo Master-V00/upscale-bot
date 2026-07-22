@@ -7,7 +7,10 @@ import gc
 import shutil
 import tempfile
 import time
+import traceback
 import uuid
+import zipfile
+import rarfile
 from pathlib import Path
 from typing import Optional, List
 import aiohttp
@@ -110,6 +113,34 @@ class QueueWorker:
         except Exception as e:
             logger.warning(f"⚠️ Cleanup failed for {path}: {e}")
     
+    async def _extract_archive(self, archive_path: Path, extract_to: Path):
+        """Extract ZIP/RAR, handling subfolder-inside case, then delete archive"""
+        try:
+            if archive_path.suffix.lower() == ".zip":
+                with zipfile.ZipFile(archive_path, 'r') as zf:
+                    zf.extractall(extract_to)
+            elif archive_path.suffix.lower() == ".rar":
+                with rarfile.RarFile(archive_path) as rf:
+                    rf.extractall(extract_to)
+            else:
+                logger.warning(f"  ⚠️ Unknown archive format: {archive_path.name}")
+                return
+            # If extraction created a single subfolder, move its contents up
+            items = list(extract_to.iterdir())
+            if len(items) == 1 and items[0].is_dir():
+                sub = items[0]
+                for child in list(sub.iterdir()):
+                    shutil.move(str(child), str(extract_to / child.name))
+                shutil.rmtree(sub, ignore_errors=True)
+                logger.info(f"  📂 Moved files from subfolder '{sub.name}' to input")
+        except Exception as e:
+            logger.warning(f"  ⚠️ Archive extraction error for {archive_path.name}: {e}")
+            raise
+        finally:
+            # Always clean up the archive file
+            if archive_path.exists():
+                archive_path.unlink()
+    
     async def _verify_upload(self, folder_id: str, expected_files: List[str]):
         """Verify all files were uploaded to Google Drive folder"""
         import time
@@ -209,41 +240,56 @@ class QueueWorker:
             # STEP 1: Download from Google Drive
             # ============================================
             logger.info("📥 Step 1/9: Downloading from Google Drive...")
-            files = await self.drive.list_folder_contents(folder_url)
-            logger.info(f"  📂 Found {len(files)} files in folder")
-            
-            if not files:
-                self.supabase.update_request_status(request_id, "failed", error_message="No images found in folder")
-                return
-            
-            image_files = []
-            for file in files:
-                if file["mimeType"].startswith("image/"):
-                    image_files.append(file)
-                elif file["mimeType"] in ["application/zip", "application/x-rar-compressed"]:
-                    logger.info(f"  📥 Downloading archive: {file['name']}")
-                    downloaded = await self.drive.download_file(file["id"], chapter_dir)
-                    import zipfile, rarfile
-                    if downloaded.suffix.lower() == ".zip":
-                        with zipfile.ZipFile(downloaded, 'r') as zip_ref:
-                            zip_ref.extractall(input_dir)
-                    elif downloaded.suffix.lower() == ".rar":
-                        with rarfile.RarFile(downloaded) as rf:
-                            rf.extractall(input_dir)
-            
-            for file in image_files:
-                logger.info(f"  📥 Downloading: {file['name']}")
-                await self.drive.download_file(file["id"], input_dir)
-            
+
             image_extensions = {'.png', '.jpg', '.jpeg', '.webp', '.bmp'}
+
+            # Detect if URL is a single file or a folder
+            file_id = self.drive._extract_file_id(folder_url)
+            folder_id = self.drive._extract_folder_id(folder_url)
+
+            if file_id and not folder_id:
+                # ── Single file link ──
+                logger.info("  🔗 Detected single file link")
+                file_info = await self.drive.get_file_info(file_id)
+                mime = file_info.get("mimeType", "")
+                if not mime.startswith("image/"):
+                    self.supabase.update_request_status(request_id, "failed", error_message="URL is not an image")
+                    return
+                logger.info(f"  📥 Downloading single image: {file_info['name']}")
+                await self.drive.download_file(file_id, input_dir)
+                is_single_file = True
+            else:
+                # ── Folder link ──
+                files = await self.drive.list_folder_contents(folder_url)
+                logger.info(f"  📂 Found {len(files)} files in folder")
+
+                if not files:
+                    self.supabase.update_request_status(request_id, "failed", error_message="No images found in folder")
+                    return
+
+                image_files = []
+                for file in files:
+                    if file["mimeType"].startswith("image/"):
+                        image_files.append(file)
+                    elif file["mimeType"] in ["application/zip", "application/x-rar-compressed"]:
+                        logger.info(f"  📥 Downloading archive: {file['name']}")
+                        downloaded = await self.drive.download_file(file["id"], chapter_dir)
+                        await self._extract_archive(downloaded, input_dir)
+
+                for file in image_files:
+                    logger.info(f"  📥 Downloading: {file['name']}")
+                    await self.drive.download_file(file["id"], input_dir)
+
+                is_single_file = False
+
+            # Collect all images from input_dir
             all_images = sorted([f for f in input_dir.iterdir() if f.suffix.lower() in image_extensions])
-            
             logger.info(f"  📸 Found {len(all_images)} images to process")
-            
+
             if not all_images:
                 self.supabase.update_request_status(request_id, "failed", error_message="No valid images found")
                 return
-            
+
             # ============================================
             # STEP 2: Calculate credits
             # ============================================
@@ -386,6 +432,7 @@ class QueueWorker:
             
         except Exception as e:
             logger.error(f"❌ Error processing request #{request_id}: {e}")
+            logger.error(f"  🔍 Traceback:\n{traceback.format_exc()}")
             self.supabase.update_request_status(request_id, "failed", error_message=str(e))
             if sub_folder_id:
                 try:

@@ -276,6 +276,22 @@ class DriveService:
                     logger.warning(f"⚠️ Failed to delete {file_id}: {resp.status}")
                     return False
     
+    async def get_file_info(self, file_id: str) -> dict:
+        """Get metadata for a single file from Google Drive"""
+        access_token = await self._get_access_token()
+        async with aiohttp.ClientSession() as session:
+            headers = {"Authorization": f"Bearer {access_token}"}
+            async with session.get(
+                f"https://www.googleapis.com/drive/v3/files/{file_id}",
+                params={"fields": "id, name, mimeType, size"},
+                headers=headers
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                else:
+                    error = await resp.text()
+                    raise Exception(f"Failed to get file info: {resp.status} - {error}")
+
     async def list_files_in_folder(self, folder_id: str) -> List[str]:
         """List all file names in a Google Drive folder"""
         access_token = await self._get_access_token()
