@@ -42,7 +42,3 @@ Thumbs.db
 # Temp files
 *.tmp
 *.temp
-New Text Document.txt
-
-# Sync script (may contain credentials)
-sync_to_server.ps1
