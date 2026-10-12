@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="logo.jpeg" alt="UPSCALE BOT logo" width="200" />
+
 # 🖼️ UPSCALE BOT
 
 ### تكبير صور المانهوا 4x بالذكاء الاصطناعي — AI 4x Manhwa Upscaler
